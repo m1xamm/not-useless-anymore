@@ -27,7 +27,13 @@ sourceSets.main.resources {
 }
 
 repositories {
-    // Add here additional repositories if required by some of the dependencies below.
+    // GeckoLib is not bundled with NeoForge, it ships as a separate library mod.
+    exclusiveContent {
+        forRepository {
+            maven { name = 'GeckoLib'; url = 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/' }
+        }
+        filter { includeGroupAndSubgroups('com.geckolib') }
+    }
 }
 
 base {
@@ -111,6 +117,12 @@ configurations {
 }
 
 dependencies {
+    // GeckoLib is a hard runtime dependency: the storm helmet rod model is rendered through it.
+    // compileOnly + runtimeOnly keeps the GeckoLib classes out of our jar.
+    compileOnly "com.geckolib:geckolib-neoforge-26.1.2:5.5.2"
+    runtimeOnly "com.geckolib:geckolib-neoforge-26.1.2:5.5.2"
+    interfaceInjectionData "com.geckolib:geckolib-neoforge-26.1.2:5.5.2"
+
     // Example optional mod dependency with JEI
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
     // compileOnly "mezz.jei:jei-${mc_version}-common-api:${jei_version}"

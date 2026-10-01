@@ -52,24 +52,32 @@ block sphere and takes them safely. The player is the rod.
 
 ## Replacing the lightning rod model
 
-The worn storm helmet currently has no extra 3D model. To add one, the intended path is
-[GeckoLib](https://github.com/bernie-g/geckolib) 5.5.2, which has a `GeoArmorRenderer` built for
-exactly this case and a 26.1.2 build.
+The worn storm helmet currently uses a placeholder rod model, a plain copper post on the `head`
+bone. Replace it with your own:
 
-1. Model the rod in BlockBench with the GeckoLib plugin.
-2. Export to `src/main/resources/assets/nua/geckolib/models/storm_helmet_rod.geo.json` and
-   `src/main/resources/assets/nua/geckolib/animations/storm_helmet_rod.animation.json`.
-3. Texture at `src/main/resources/assets/nua/geckolib/textures/storm_helmet_rod.png`.
-4. Add the GeckoLib dependency and register the geo renderer for `NuaItems.STORM_HELMET`.
+1. In BlockBench pick the **GeckoLib** model type and the **Armor** format, so you get a model with
+   the `head` bone. GeckoLib attaches the bone to the matching armour segment
+   (`HEAD, CHEST, LEFT_ARM, RIGHT_ARM, LEFT_LEG, RIGHT_LEG, LEFT_FOOT, RIGHT_FOOT`).
+2. Export and place the files **named after the item id**, which is `storm_helmet`:
 
-The `assets/nua/items/storm_helmet.json` definition and `assets/nua/models/item/storm_helmet.json`
-model already exist and only cover the inventory icon.
-
-The item icon itself is generated, not hand drawn. Regenerate it with:
-
-```sh
-python tools/generate_textures.py
 ```
+src/main/resources/assets/nua/geckolib/models/armor/storm_helmet.geo.json
+src/main/resources/assets/nua/geckolib/animations/armor/storm_helmet.animation.json
+src/main/resources/assets/nua/textures/armor/storm_helmet.png
+```
+
+Note the texture goes to `textures/armor/`, **not** under `geckolib/`.
+
+3. No code changes are needed. `StormHelmetItem` already implements `GeoItem` and
+   `NuaClient#registerRenderers` already attaches a `GeoArmorRenderer`. To add an animation, fill
+   in `StormHelmetItem#registerControllers` — it is currently empty because the model is static.
+
+The inventory icon is separate and generated: `assets/nua/items/storm_helmet.json` and
+`assets/nua/models/item/storm_helmet.json`, with the PNG produced by
+`python tools/generate_textures.py`.
+
+GeckoLib 5 is a hard dependency on **both** sides, not just the client: the item class itself
+implements `GeoItem`, so a dedicated server cannot load the mod without it.
 
 ## Building
 

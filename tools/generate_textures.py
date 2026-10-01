@@ -51,6 +51,7 @@ ROD = {
 }
 
 OUT = os.path.join("src", "main", "resources", "assets", "nua", "textures", "item")
+ARMOR_OUT = os.path.join("src", "main", "resources", "assets", "nua", "textures", "armor")
 
 
 def build(pixels):
@@ -64,6 +65,7 @@ def build(pixels):
 
 def main():
     os.makedirs(OUT, exist_ok=True)
+    os.makedirs(ARMOR_OUT, exist_ok=True)
 
     storm = [list(row) for row in COPPER_HELMET]
     for (y, x), color in ROD.items():
@@ -71,6 +73,16 @@ def main():
 
     build(storm).save(os.path.join(OUT, "storm_helmet.png"))
     print("wrote", os.path.join(OUT, "storm_helmet.png"))
+
+    # GeckoLib armour texture. The placeholder model samples uv [0,0] on every cube, so a flat
+    # copper field with a lit top edge is enough until the real model replaces it.
+    rod = Image.new("RGBA", (16, 16), BRIGHT)
+    px = rod.load()
+    for y in range(16):
+        for x in range(16):
+            px[x, y] = GLOW if y < 3 else (BRIGHT if y < 11 else MID)
+    rod.save(os.path.join(ARMOR_OUT, "storm_helmet.png"))
+    print("wrote", os.path.join(ARMOR_OUT, "storm_helmet.png"))
 
 
 if __name__ == "__main__":
