@@ -355,6 +355,127 @@ Fluids mirror this: `FluidStack`/`FluidResource` need loaded registries, `FluidS
 
 Registered on `NeoForgeRegistries.ATTACHMENT_TYPES` with an `IAttachmentSerializer` / `ValueIOSerializable`. Access via `getData` / `hasData` / `setData` / `syncData`. Prefer attachments over injecting new data into existing objects.
 
+## Armor (26.1 — `ArmorItem` is gone)
+
+`ArmorItem`, `SwordItem`, `DiggerItem` and `ArmorItem` were all removed. Armor is a plain `Item`
+built by `Item.Properties#humanoidArmor(ArmorMaterial, ArmorType)`:
+
+```java
+public static final DeferredItem<Item> COPPER_HELMET = ITEMS.registerItem(
+    "copper_helmet",
+    props -> new Item(props.humanoidArmor(ArmorMaterials.COPPER, ArmorType.HELMET))
+);
+```
+
+`humanoidArmor` does all of it: `durability(type.getDurability(material.durability()))`,
+`attributes(material.createAttributes(type))`, `enchantable(material.enchantmentValue())`,
+`component(EQUIPPABLE, Equippable.builder(type.getSlot()).setEquipSound(...).setAsset(...))`, and
+`repairable(material.repairIngredient())`.
+
+There is **no `ARMOR` data component** — defense/toughness/knockback live purely as attribute
+modifiers inside `ATTRIBUTE_MODIFIERS`.
+
+### `ArmorMaterial` — `net.minecraft.world.item.equipment.ArmorMaterial`
+
+```java
+record ArmorMaterial(
+    int durability,                             // multiplied by ArmorType#getDurability
+    Map<ArmorType, Integer> defense,
+    int enchantmentValue,
+    Holder<SoundEvent> equipSound,
+    float toughness,
+    float knockbackResistance,
+    TagKey<Item> repairIngredient,
+    ResourceKey<EquipmentAsset> assetId         // <- the worn armour layer texture
+)
+```
+
+`ArmorType` = `HELMET, CHESTPLATE, LEGGINGS, BOOTS, BODY`; unit durabilities 11/16/15/13/16.
+Vanilla materials are public constants on `net.minecraft.world.item.equipment.ArmorMaterials`:
+`LEATHER, COPPER, CHAINMAIL, IRON, GOLD, DIAMOND, TURTLE_SCUTE, NETHERITE, ARMADILLO_SCUTE`.
+
+**Reuse them.** `ArmorMaterials.COPPER` and `EquipmentAssets.COPPER` are public, so a mod item can
+have byte-identical stats *and* the vanilla armour layer texture with no new assets:
+
+```java
+props -> new Item(props.humanoidArmor(ArmorMaterials.COPPER, ArmorType.HELMET))
+```
+
+`EquipmentAssets.ROOT_ID` is the registry key (`equipment_asset`); `EquipmentAssets.createId(name)`
+builds a `minecraft:`-namespaced key. `EquipmentAssets` lives in
+`net.minecraft.world.item.equipment`, **not** in the client package.
+
+### `Equippable` — `net.minecraft.world.item.equipment.Equippable`
+
+```java
+Equippable.builder(EquipmentSlot slot)
+    .setEquipSound(Holder<SoundEvent>)
+    .setAsset(ResourceKey<EquipmentAsset>)
+    .setCameraOverlay(Identifier)
+    .setAllowedEntities(EntityType<?>...)  /  (HolderSet<EntityType<?>>)
+    .setDispensable(boolean) .setSwappable(boolean) .setDamageOnHurt(boolean)
+    .setEquipOnInteract(boolean) .setCanBeSheared(boolean) .setShearingSound(Holder<SoundEvent>)
+    .build()
+```
+
+`EquipmentSlot` = `MAINHAND, OFFHAND, FEET, LEGS, CHEST, HEAD, BODY, SADDLE`, with `isArmor()` and
+`getType()`. Read worn gear with `LivingEntity#getItemBySlot(EquipmentSlot)`.
+
+### Armour layer textures
+
+`assets/<ns>/equipment/<path>.json` → `net.minecraft.client.resources.model.EquipmentClientInfo`:
+
+```json
+{
+  "layers": {
+    "humanoid": [ { "texture": "minecraft:copper" } ],
+    "humanoid_leggings": [ { "texture": "minecraft:copper" } ]
+  }
+}
+```
+
+Textures resolve under `textures/entity/equipment/<layer_type>/`. A `Layer` also supports
+`"dyeable": { "color_when_undyed": 7767006 }` and `"use_player_texture": true`.
+Datagen provider: `net.minecraft.client.data.models.EquipmentAssetProvider`, registered on
+`GatherDataEvent.Client`.
+
+> A `LayerType` is `IExtensibleEnum`, so a mod can add one, but the mesh and pose come from the
+> `RenderLayer` that calls `EquipmentLayerRenderer#renderLayers(...)` — a custom `LayerType` alone
+> adds **no geometry**. For a physical accessory on a player, register a `RenderLayer` on the player
+> renderer via `EntityRenderersEvent.AddLayers` instead.
+
+## Lightning
+
+The hook for "a lightning rod absorbs the strike" is
+`net.neoforged.neoforge.event.entity.EntityStruckByLightningEvent` (game bus, cancellable,
+`getEntity()` + `getLightning()`). It is posted from `LightningBolt#tick()`:
+
+```java
+if (!EventHooks.onEntityStruckByLightning(entity, this)) {
+    entity.thunderHit((ServerLevel) this.level(), this);
+}
+```
+
+Cancelling it prevents `Entity#thunderHit`, which is the **only** place that both applies fire and
+deals damage — so one cancel gives full lightning immunity with no lingering fire.
+
+Relevant `LightningBolt` members: `setVisualOnly(boolean)`, `setCause(ServerPlayer)`,
+`getCause()`, `setDamage(float)`, `getDamage()`, `getBlocksSetOnFire()`, `getHitEntities()`.
+Entity damage scan is a 3-block radius box extending 6 blocks up. `setVisualOnly(true)` is what
+vanilla does when a `LightningRodBlock` is struck — a visual-only bolt sets no fire and deals no
+damage.
+
+Vanilla lightning rods divert strikes within a **128 block sphere** in Java Edition, only when they
+are the highest block in their column, choosing the rod closest to the original strike. Lightning
+diverted by a rod still damages mobs in a 6x12x6 volume centred 4 blocks above it.
+
+To *attract* a bolt to a player, intercept `EntityJoinLevelEvent` (fired from
+`Level#addFreshEntity`, before the first tick), check `loadedFromDisk()` is false, then
+`bolt.setPos(x, y, z)` and optionally `bolt.setCause(player)`.
+
+`DamageTypes.LIGHTNING_BOLT` is the `ResourceKey<DamageType>`; `DamageSource#is(ResourceKey)` and the
+`DamageTypeTags.IS_LIGHTNING` tag both work for detection.
+
 ## Sidedness rules
 
 - `Dist` = **physical** side (`Dist.CLIENT`, `Dist.DEDICATED_SERVER`). `FMLEnvironment.getDist()`.

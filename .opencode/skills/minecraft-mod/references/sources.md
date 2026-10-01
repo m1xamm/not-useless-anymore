@@ -81,3 +81,34 @@ Raw file pattern, useful for diffing:
 - ModDevGradle 2.0.148 / NeoGradle 7.1.39 current at time of writing; check <https://github.com/neoforged/ModDevGradle> for newer.
 - NeoForge `26.1.2.112` is the stable artifact for MC 26.1.2; the 26.1 line used `-beta` suffixes that are being dropped as the branch stabilises.
 - Parchment is obsolete.
+
+## Content that already exists in vanilla - check before inventing
+
+Vanilla gained a lot across 1.21.x/26.x. Before designing a new item, confirm the vanilla version
+does not already have it, or you will build a duplicate.
+
+- **Copper armour** (`copper_helmet`, `copper_chestplate`, `copper_leggings`, `copper_boots`) was
+  added in **1.21.9** (snapshot 25w31a) and refined in 26.1 (baby-mob texture, snap7).
+  `ArmorMaterials.COPPER` = `new ArmorMaterial(11, makeDefense(1,3,4,2,4), 8, ARMOR_EQUIP_COPPER, 0f, 0f, REPAIRS_COPPER_ARMOR, EquipmentAssets.COPPER)`
+  giving helmet 2 defense / 0 toughness / 121 durability / 8 enchantability, repaired with copper
+  ingots. Copper tools, a copper spear, and copper horse/nautilus armour exist too.
+  A mod can grant its own behaviour to vanilla items through events instead of registering
+  competing versions, and can reuse `ArmorMaterials.COPPER` + `EquipmentAssets.COPPER` directly to
+  get identical stats and the vanilla armour layer texture for free.
+- Lightning rod diverts strikes in a **128 block sphere** (JE), must be the highest block in its
+  column, picks the rod nearest the strike; diverted bolts still hurt mobs in a 6x12x6 volume.
+
+### How to verify vanilla content quickly
+
+26.1 is deobfuscated, so the shipped `client.jar` is readable:
+
+```powershell
+$jar = "$env:USERPROFILE\.gradle\caches\neoformruntime\artifacts\minecraft_26.1.2_client.jar"
+jar tf $jar | Select-String "assets/minecraft/items/"
+javap -cp $jar net.minecraft.world.item.Items | Select-String "COPPER"
+jar tf $jar | Select-String "data/minecraft/recipe/"
+```
+
+The fully decompiled, NeoForge-patched `.java` sources are also on disk after the first build
+(`mergeWithSources_*_output.jar` under `~/.gradle/caches/neoformruntime/intermediate_results/`).
+Extract that and grep it instead of trusting the docs.

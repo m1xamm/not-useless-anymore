@@ -19,6 +19,7 @@ Other supported args: `--existing-mod`, `--includeDev`, `--includeReports`.
 Resource pack:
 ```
 assets/<modid>/
+    items/<registry_name>.json         <- 26.1 item definition, see below
     lang/en_us.json
     models/block/<name>.json
     models/item/<name>.json
@@ -28,24 +29,27 @@ assets/<modid>/
     sounds.json  (+ sounds/<...>)
     particles/<name>.json
     equipment/<name>.json
-    neoforge/animations/entity/<path>.json    # NeoForge Gecko animations
 ```
 
 Data pack:
 ```
 data/<modid>/
-    recipes/<name>.json
-    advancements/<name>.json
-    loot_tables/blocks/<name>.json
+    recipe/<name>.json               <- SINGULAR in 26.1
+    advancement/<name>.json
+    loot_table/blocks/<name>.json
     tags/item/<name>.json        tags/block/...  tags/fluid/...
     worldgen/...
     structures/*.nbt
     test_instance/*.json          test_environment/*.json   world_clock/*.json
 ```
 
-`pack.mcmeta` is generated at runtime for mods — you do not write it. Only bundled datapacks injected via `AddPackFindersEvent` need a real one.
+> **Folder names were unpluralised in the 26.1 cycle**: `recipe/`, `advancement/`, `loot_table/`.
+> A mod that ships `recipes/` loads nothing and produces no error at build time. Verify a folder
+> name against the vanilla jar before assuming — list it with
+> `jar tf <minecraft_26.1.2_client.jar> | Select-String "data/minecraft/recipe/"`.
+> Entity textures also moved into per-entity subdirectories (`textures/entity/panda/…`).
 
-Entity textures moved into per-entity subdirectories in 26.1 (`textures/entity/panda/…`). This is the only documented pack-layout rename — see `migration-26.1.md` §11.
+`pack.mcmeta` is generated at runtime for mods — you do not write it. Only bundled datapacks injected via `AddPackFindersEvent` need a real one.
 
 ## Data providers
 
@@ -64,7 +68,7 @@ All extend `DataProvider`. Register with `event.createProvider(...)` on the appr
 | `SoundDefinitionsProvider` | `sounds.json` |
 | `SpriteSourceProvider` | GUI sprite sources |
 | `ParticleDescriptionProvider` | particles |
-| `EquipmentAssetProvider` | equipment assets |
+| `EquipmentAssetProvider` | equipment assets (`net.minecraft.client.data.models`) |
 | `DatapackBuiltinEntriesProvider` | datapack builtin entries |
 | `JsonCodecProvider` | raw JSON |
 | `PackMetadataGenerator` | `pack.mcmeta` |
@@ -106,11 +110,69 @@ public static void gatherData(GatherDataEvent.Client event) {
 - `determineBookCategory` → `determineCraftingBookCategory`.
 - `oreSmelting`/`oreBlasting`/`oreCooking`/`generic` need a `CookingBookCategory`.
 - Custom recipe classes register a `RecipeSerializer` record with a `MapCodec` + `StreamCodec` (no more inner `Serializer` classes, no `register` method).
-- JSON `Ingredient` is a plain holder-set: `"minecraft:diamond"` or `"#c:ingots/copper"`.
+- `ShapelessRecipe`/`ShapedRecipe` take `Recipe.CommonInfo` + `CraftingRecipe.CraftingBookInfo`; the book's fields are `category` (`building`/`redstone`/`equipment`/`misc`) and optional `group`.
+- `Ingredient.CODEC` is a `HolderSetCodec`, so an ingredient is a bare id string.
+
+### Hand-written JSON (verified against the 26.1.2 jar)
+
+Shapeless:
+```json
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    "minecraft:copper_helmet",
+    "minecraft:lightning_rod"
+  ],
+  "result": { "id": "nua:storm_helmet", "count": 1 }
+}
+```
+
+Shaped:
+```json
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "key": { "X": "minecraft:copper_ingot" },
+  "pattern": ["XXX", "X X"],
+  "result": { "id": "minecraft:copper_helmet" }
+}
+```
+
+Notes:
+- Result is `{"id": ...}` — **not** `{"item": ...}`. `count` is optional, defaults to 1.
+- An ingredient is a bare item id or a bare tag id (`"#minecraft:ingots/copper"`). No `{"item": ...}` wrapper.
+- A `key` value may also be a list of alternatives.
+
+## Item definitions (26.1 "Client Items")
+
+Item models are no longer resolved from a blockstate. Every item needs a definition at
+`assets/<ns>/items/<registry_name>.json`, keyed off `DataComponents#ITEM_MODEL`, which defaults to
+the item's registry id. It points at a model under `assets/<ns>/models/item/`:
+
+```json
+{ "model": { "type": "minecraft:model", "model": "nua:item/storm_helmet" } }
+```
+
+```json
+{ "parent": "minecraft:item/generated", "textures": { "layer0": "nua:item/storm_helmet" } }
+```
+
+Texture at `assets/<ns>/textures/item/storm_helmet.png`. Definition `type` can also be
+`minecraft:select`, `minecraft:composite`, `minecraft:range_dispatch`, `minecraft:special`, or
+`neoforge:fluid_container` — vanilla trimmable armour uses `select` on `minecraft:trim_material`.
+
+**Forgetting the `assets/<ns>/items/` file is not a build error. It shows up in game as a missing
+model.**
 
 ## Tags
 
 `KeyTagProvider` subclasses, `addTags(HolderLookup.Provider)`. NeoForge adds `createBlockAndItemTags(...)` convenience. Plant support moved to `support_*` block/fluid tags in 26.1; override `canSurvive` or `VegetationBlock#mayPlaceOn`.
+
+To join a vanilla tag, ship your own file at the vanilla path with `replace: false`:
+```json
+{ "replace": false, "values": ["nua:storm_helmet"] }
+```
 
 ## Lang file
 

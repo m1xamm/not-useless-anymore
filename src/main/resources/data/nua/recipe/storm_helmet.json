@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    "minecraft:copper_helmet",
+    "minecraft:lightning_rod"
+  ],
+  "result": {
+    "id": "nua:storm_helmet",
+    "count": 1
+  }
+}
